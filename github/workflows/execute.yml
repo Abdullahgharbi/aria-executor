@@ -1,0 +1,40 @@
+name: ARIA Executor
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: 'Task ID'
+        required: true
+      command:
+        description: 'Command to run'
+        required: true
+      callback_url:
+        description: 'Webhook URL'
+        required: true
+      secret:
+        description: 'Auth secret'
+        required: true
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Execute command
+        id: run
+        run: |
+          OUTPUT=$(eval "${{ github.event.inputs.command }}" 2>&1 | head -c 3000)
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send result back to ARIA
+        run: |
+          curl -s -X POST "${{ github.event.inputs.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ github.event.inputs.secret }}" \
+            -d '{
+              "task_id": "${{ github.event.inputs.task_id }}",
+              "output": ${{ toJSON(steps.run.outputs.output) }},
+              "status": "done"
+            }'
